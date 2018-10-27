@@ -1,7 +1,10 @@
-import requests
 import re
 import os
+import time
+import os.path
+import requests
 import multiprocessing
+
 
 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:60.0) Gecko/20100101 Firefox/60.0", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5", "Accept-Encoding": "gzip, deflate", "Referer": "https://hashes.org/", "Connection": "close", "Upgrade-Insecure-Requests": "1"}
 s = requests.Session()
@@ -47,7 +50,19 @@ def renameFile(file1, file2):
 	os.rename(file1, file2)
 
 
+def createOldFile(file):
+	timestamp = time.ctime(os.path.getmtime(file))
+	outputFile = "{0}-{1}.txt".format(file.split(".")[0], timestamp.replace(" ","-"))
+	os.system("mv {0} {1}".format(file, outputFile))
+	return outputFile
+
+
+def findDiffs(oldfile, newfile):
+	os.system("comm -13 {0} {1} > wordlistDiff.txt".format(oldfile, newfile))
+
+
 def main():
+	# IDz = ["1049", "1048", "1043", "1036", "855"]
 	initialSession = initiateSession()
 	IDs = findIDs(initialSession)
 	print "List of IDs: {0}".format(IDs)
@@ -56,8 +71,19 @@ def main():
 		createLeakFile(id)
 		uniqAndMergeFile("{0}.leakfile".format(id), "merged.leakfile")
 		deleteFile("{0}.leakfile".format(id))
-	uniqAndMergeFile("merged.leakfile", "wordlist.txt")
-	deleteFile("merged.leakfile")
+	if os.path.isfile("wordlist.txt"):
+		print "Found file 'wordlist.txt'"
+		oldFile = createOldFile("wordlist.txt")
+		print "Created old file '{0}'".format(oldFile)
+		uniqAndMergeFile("merged.leakfile", "wordlist.txt")
+		deleteFile("merged.leakfile")
+		print "Diffing for new passwords"
+		findDiffs(oldFile, "wordlist.txt")
+		print "Done - written data to 'wordlist.txt' and 'wordlistDiff.txt'"
+	else:
+		uniqAndMergeFile("merged.leakfile", "wordlist.txt")
+		deleteFile("merged.leakfile")
+		print "Done - written to 'wordlist.txt'"
 
 
 if __name__ == "__main__":
