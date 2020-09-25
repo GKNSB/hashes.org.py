@@ -1,89 +1,82 @@
-import re
-import os
-import time
-import os.path
-import requests
+#!/usr/bin/python3
+
+import html
+import json
 import multiprocessing
+import os
+import requests
+import tqdm
 
 
-headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:60.0) Gecko/20100101 Firefox/60.0", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5", "Accept-Encoding": "gzip, deflate", "Referer": "https://temp.hashes.org/", "Connection": "close", "Upgrade-Insecure-Requests": "1"}
-s = requests.Session()
+def createSession():
+	headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:60.0) Gecko/20100101 Firefox/60.0", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5", "Accept-Encoding": "gzip, deflate", "Referer": "https://temp.hashes.org/", "Connection": "close", "Upgrade-Insecure-Requests": "1"}
+	session = requests.Session()
+	session.headers.update(headers)
+	return session
 
 
-def initiateSession():
-	response = s.get("https://temp.hashes.org/api/data.php?select=leaks")
-	return response.content
+def queryLeaks(session):
+	response = session.get("https://temp.hashes.org/api/data.php?select=leaks")
+	leaks = json.loads(response.content.strip().decode('utf-8'))
+	return leaks
 
 
-def findIDs(content):
-	regex = "download\.php\?hashlistId=(\d+)\&type=hfound"
-	return re.findall(regex, content)
+def fetchLeak(session, leak):
+	response = session.get("https://temp.hashes.org/download.php?hashlistId={0}&type=found".format(leak["id"]), stream=True)
 
-
-def createLeakFile(id):
-	url = "https://temp.hashes.org/download.php?hashlistId={0}&type=found".format(id)
-	print "Fetching {0}".format(url)
-	response = s.get(url, headers=headers, stream=True)
-	with open("{0}.leakfile".format(id), "wb") as f:
+	with open("{0}.leak".format(leak["id"]), "wb") as leakFile:
 		for chunk in response.iter_content(chunk_size=1024):
 			if chunk:
-				f.write(chunk)
+				leakFile.write(chunk)
 
 
-def mergeFile(file, fileName):
-	with open(file, "r") as openFile:
-		with open(fileName, "a") as mergedFile:
-			for line in openFile:
-				mergedFile.write(line)
+def sortUnique(sourceFile, targetFile):
+	os.system("sort -u --parallel={0} {1} >> {2}".format(multiprocessing.cpu_count(), sourceFile, targetFile))
 
 
-def uniqAndMergeFile(sourceFile, targetFile):
-	coreCount = multiprocessing.cpu_count()
-	os.system("sort -u --parallel={0} {1} >> {2}".format(coreCount, sourceFile, targetFile))
-
-
-def deleteFile(file):
-	os.remove(file)
-
-
-def renameFile(file1, file2):
-	os.rename(file1, file2)
-
-
-def createOldFile(file):
-	timestamp = time.ctime(os.path.getmtime(file))
-	outputFile = "{0}-{1}.txt".format(file.split(".")[0], timestamp.replace(" ","-"))
-	os.system("mv {0} {1}".format(file, outputFile))
-	return outputFile
-
-
-def findDiffs(oldfile, newfile):
-	os.system("comm -13 {0} {1} > wordlistDiff.txt".format(oldfile, newfile))
+def diff(oldFile, newFile, outFile):
+	os.system("comm -13 {0} {1} > {2}".format(oldFile, newFile, outFile))
 
 
 def main():
-	# IDz = ["1049", "1048", "1043", "1036", "855"]
-	initialSession = initiateSession()
-	IDs = findIDs(initialSession)
-	print "List of IDs: {0}".format(IDs)
-	print "Fetching {0} files".format(len(IDs))
-	for id in IDs:
-		createLeakFile(id)
-		uniqAndMergeFile("{0}.leakfile".format(id), "merged.leakfile")
-		deleteFile("{0}.leakfile".format(id))
+	session = createSession()
+	leaks = queryLeaks(session)
+	print("Fetching {0} leak files...\r\n".format(len(leaks)))
+
+	padding = 0
+
+	for leak in leaks:
+		name = html.unescape(leak["name"].split("<code>")[0])
+
+		if len(name) > padding:
+			padding = len(name)
+
+	tikioudiem = tqdm.tqdm(leaks, miniters=1, bar_format="{desc}{n_fmt: >4}/{total_fmt} {percentage:3.0f}%|{bar}|")
+
+	for item in tikioudiem:
+		name = html.unescape(item["name"].split("<br><code>")[0])
+		tikioudiem.set_description(name + "." * (padding - len(name)))
+		fetchLeak(session, item)
+		sortUnique("{0}.leak".format(item["id"]), "merged.leak")
+		os.remove("{0}.leak".format(item["id"]))
+
 	if os.path.isfile("wordlist.txt"):
-		print "Found file 'wordlist.txt'"
-		oldFile = createOldFile("wordlist.txt")
-		print "Created old file '{0}'".format(oldFile)
-		uniqAndMergeFile("merged.leakfile", "wordlist.txt")
-		deleteFile("merged.leakfile")
-		print "Diffing for new passwords"
-		findDiffs(oldFile, "wordlist.txt")
-		print "Done - written data to 'wordlist.txt' and 'wordlistDiff.txt'"
+		print("\r\nFound file 'wordlist.txt'!")
+		os.rename("wordlist.txt", "wordlist.old")
+		print("Moved to 'wordlist.old'.")
+		print("Deduplicating the merged leak file...")
+		sortUnique("merged.leak", "wordlist.txt")
+		os.remove("merged.leak")
+		print("Comparing files for new entries...")
+		diff("wordlist.old", "wordlist.txt", "diff.txt")
+		os.remove("wordlist.old")
+		print("Done!")
+
 	else:
-		uniqAndMergeFile("merged.leakfile", "wordlist.txt")
-		deleteFile("merged.leakfile")
-		print "Done - written to 'wordlist.txt'"
+		print("\r\nDeduplicating the merged leak file...")
+		sortUnique("merged.leak", "wordlist.txt")
+		os.remove("merged.leak")
+		print("Done!")
 
 
 if __name__ == "__main__":
