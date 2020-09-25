@@ -6,12 +6,12 @@ import requests
 import multiprocessing
 
 
-headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:60.0) Gecko/20100101 Firefox/60.0", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5", "Accept-Encoding": "gzip, deflate", "Referer": "https://hashes.org/", "Connection": "close", "Upgrade-Insecure-Requests": "1"}
+headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:60.0) Gecko/20100101 Firefox/60.0", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5", "Accept-Encoding": "gzip, deflate", "Referer": "https://temp.hashes.org/", "Connection": "close", "Upgrade-Insecure-Requests": "1"}
 s = requests.Session()
 
 
 def initiateSession():
-	response = s.get("https://hashes.org/leaks.php")
+	response = s.get("https://temp.hashes.org/api/data.php?select=leaks")
 	return response.content
 
 
@@ -21,7 +21,7 @@ def findIDs(content):
 
 
 def createLeakFile(id):
-	url = "https://hashes.org:443/download.php?hashlistId={0}&type=found".format(id)
+	url = "https://temp.hashes.org/download.php?hashlistId={0}&type=found".format(id)
 	print "Fetching {0}".format(url)
 	response = s.get(url, headers=headers, stream=True)
 	with open("{0}.leakfile".format(id), "wb") as f:
