@@ -6,6 +6,6 @@ Dependencies:
 
 pip install requests,tqdm
 
-Latest time the script was run on 21/10/2018 
-* Retrieved unique passwords 636.746.101 
+Latest time the script was run on 28/09/2020 
+* Retrieved unique passwords 878.610.690 
 * breachcompilation unique passwords 384.153.427 

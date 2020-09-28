@@ -38,6 +38,12 @@ def diff(oldFile, newFile, outFile):
 	os.system("comm -13 {0} {1} > {2}".format(oldFile, newFile, outFile))
 
 
+def addOldUnique(oldFile, newFile):
+	os.system("comm -23 {0} {1} > tempFile".format(oldFile, newFile))
+	os.system("cat tempFile >> {0}".format(newFile))
+	os.remove("tempFile")
+
+
 def main():
 	session = createSession()
 	leaks = queryLeaks(session)
@@ -64,12 +70,20 @@ def main():
 		print("\r\nFound file 'wordlist.txt'!")
 		os.rename("wordlist.txt", "wordlist.old")
 		print("Moved to 'wordlist.old'.")
+
 		print("Deduplicating the merged leak file...")
 		sortUnique("merged.leak", "wordlist.txt")
 		os.remove("merged.leak")
+
+		# print("Adding old unique lines to new wordlist...")
+		# addOldUnique("wordlist.old", "tempFile.txt")
+		# sortUnique("tempFile.txt", "wordlist.txt")
+		# os.remove("tempFile.txt")
+
 		print("Comparing files for new entries...")
 		diff("wordlist.old", "wordlist.txt", "diff.txt")
 		os.remove("wordlist.old")
+
 		print("Done!")
 
 	else:
